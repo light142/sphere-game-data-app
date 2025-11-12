@@ -3,9 +3,9 @@
  * Manages game data state globally and provides data to all pages
  */
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { gameDataAPI } from '../services/api';
-import config from '../config';
+import { useAuth } from './AuthContext';
 
 const GameDataContext = createContext(null);
 
@@ -13,12 +13,13 @@ export const GameDataProvider = ({ children }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     // Only fetch if user is authenticated
-    const token = localStorage.getItem(config.auth.tokenStorageKey);
-    if (!token) {
+    if (!isAuthenticated) {
       setLoading(false);
+      setData([]);
       return;
     }
 
@@ -36,12 +37,15 @@ export const GameDataProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAuthenticated]);
 
-  // Fetch data once on mount, but only if authenticated
+  // Fetch data when authentication state changes
   useEffect(() => {
-    fetchData();
-  }, []);
+    // Wait for auth to finish loading before fetching
+    if (!authLoading) {
+      fetchData();
+    }
+  }, [isAuthenticated, authLoading, fetchData]);
 
   const refreshData = async () => {
     await fetchData();
