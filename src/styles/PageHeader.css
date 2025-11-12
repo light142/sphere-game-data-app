@@ -1,0 +1,138 @@
+.page-header {
+  margin-bottom: 32px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, #C41E3A 0%, #B91C1C 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(196, 30, 58, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+.page-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.page-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  gap: 24px;
+}
+
+.page-header-text {
+  flex: 1;
+}
+
+.page-header h1 {
+  color: #FFFFFF;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.page-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  margin: 8px 0 0 0;
+  font-weight: 400;
+}
+
+.refresh-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: #FFFFFF;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.refresh-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refresh-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.refresh-text {
+  font-size: 14px;
+}
+
+.refresh-button .loading-spinner-overlay {
+  position: static;
+  background: transparent;
+  backdrop-filter: none;
+  width: auto;
+  height: auto;
+  padding: 0;
+}
+
+.refresh-button .loading-spinner-container {
+  padding: 0;
+  min-height: auto;
+}
+
+.refresh-button .loading-spinner {
+  width: 18px;
+  height: 18px;
+}
+
+.refresh-button .spinner-ring {
+  border-width: 2px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    padding: 24px 28px;
+  }
+
+  .page-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .page-header h1 {
+    font-size: 28px;
+  }
+
+  .refresh-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

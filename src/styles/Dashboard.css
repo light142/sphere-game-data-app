@@ -1,0 +1,187 @@
+.dashboard-container {
+  width: 100%;
+  min-height: calc(100vh - 48px);
+  padding: 0;
+  max-width: 100%;
+}
+
+
+.dashboard-container .stats-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  grid-template-rows: repeat(2, 1fr) !important;
+  grid-auto-flow: row !important;
+  gap: 24px;
+  margin-bottom: 40px;
+  height: calc(100vh - 200px);
+  width: 100%;
+  max-width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-container .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-container .stats-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(6, 1fr);
+    height: auto;
+  }
+}
+
+.dashboard-container .stat-card {
+  background: #FFFFFF;
+  border-radius: 16px;
+  padding: 48px 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+  border: 1px solid #E5E7EB;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 20px;
+  height: 100%;
+}
+
+.dashboard-container .stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #C41E3A 0%, #D4AF37 100%);
+  transition: width 0.3s ease;
+}
+
+.dashboard-container .stat-card:hover::before {
+  width: 6px;
+}
+
+.dashboard-container .stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-color: #C41E3A;
+}
+
+
+.dashboard-container .stat-card-events::before {
+  background: linear-gradient(180deg, #C41E3A 0%, #B91C1C 100%);
+}
+
+.dashboard-container .stat-card-players::before {
+  background: linear-gradient(180deg, #D4AF37 0%, #C9A227 100%);
+}
+
+.dashboard-container .stat-card-sessions::before {
+  background: linear-gradient(180deg, #1A1A1A 0%, #000000 100%);
+}
+
+.dashboard-container .stat-card-games::before {
+  background: linear-gradient(180deg, #6B7280 0%, #4B5563 100%);
+}
+
+.dashboard-container .stat-card-avg-games::before {
+  background: linear-gradient(180deg, #059669 0%, #047857 100%);
+}
+
+.dashboard-container .stat-card-avg-sessions::before {
+  background: linear-gradient(180deg, #7C3AED 0%, #6D28D9 100%);
+}
+
+.dashboard-container .stat-card h3 {
+  color: #6B7280;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0;
+  opacity: 0.7;
+}
+
+.dashboard-container .stat-card .stat-value {
+  color: #1A1A1A;
+  font-size: 64px;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.1;
+  letter-spacing: -2px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-container .stat-card .stat-value {
+    font-size: 48px;
+  }
+  
+  .dashboard-container .stat-card {
+    min-height: 180px;
+    padding: 36px 24px;
+    gap: 16px;
+  }
+  
+  .dashboard-container .stat-card h3 {
+    font-size: 13px;
+  }
+}
+
+.dashboard-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.action-button {
+  padding: 14px 32px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.action-button.primary {
+  background: linear-gradient(135deg, #C41E3A 0%, #B91C1C 100%);
+  color: #FFFFFF;
+  border: 2px solid transparent;
+}
+
+.action-button.primary:hover {
+  background: linear-gradient(135deg, #B91C1C 0%, #991B1B 100%);
+  box-shadow: 0 6px 20px rgba(196, 30, 58, 0.3);
+  transform: translateY(-2px);
+}
+
+.action-button.primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(196, 30, 58, 0.2);
+}
+
+.loading,
+.error {
+  text-align: center;
+  padding: 60px 40px;
+  font-size: 18px;
+  color: #6B7280;
+  background: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.error {
+  color: #C41E3A;
+  background: linear-gradient(135deg, #FEE2E2 0%, #FEF3C7 100%);
+  border: 2px solid rgba(196, 30, 58, 0.2);
+}
+

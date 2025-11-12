@@ -1,0 +1,201 @@
+.player-detail-container {
+  width: 100%;
+}
+
+.player-detail-header {
+  margin-bottom: 32px;
+  padding: 24px 32px;
+  background: linear-gradient(135deg, #C41E3A 0%, #B91C1C 100%);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(196, 30, 58, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.player-detail-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.back-button {
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  color: #FFFFFF;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.player-detail-header h1 {
+  color: #FFFFFF;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.player-summary {
+  margin-bottom: 32px;
+}
+
+.summary-card {
+  background: #FFFFFF;
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #C41E3A 0%, #D4AF37 100%);
+}
+
+.summary-card h3 {
+  color: #1A1A1A;
+  font-size: 22px;
+  margin-bottom: 24px;
+  border-bottom: 3px solid #D4AF37;
+  padding-bottom: 14px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, #F9FAFB 0%, #FEF3C7 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  transition: all 0.3s ease;
+}
+
+.summary-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(196, 30, 58, 0.1);
+  border-color: rgba(212, 175, 55, 0.4);
+}
+
+.summary-label {
+  color: #6B7280;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.summary-value {
+  color: #1A1A1A;
+  font-size: 20px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #C41E3A 0%, #D4AF37 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.sessions-list {
+  margin-top: 32px;
+}
+
+.sessions-list h2 {
+  color: #1A1A1A;
+  font-size: 28px;
+  margin-bottom: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.session-card {
+  background: #FFFFFF;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.session-card:hover {
+  box-shadow: 0 8px 24px rgba(196, 30, 58, 0.15);
+  border-color: rgba(212, 175, 55, 0.3);
+}
+
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%);
+}
+
+.session-header:hover {
+  background: linear-gradient(135deg, #FEE2E2 0%, #FEF3C7 100%);
+}
+
+.session-info h3 {
+  color: #C41E3A;
+  font-size: 20px;
+  margin-bottom: 10px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.session-meta {
+  display: flex;
+  gap: 24px;
+  color: #6B7280;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.session-toggle {
+  font-size: 24px;
+  color: #D4AF37;
+  user-select: none;
+  font-weight: 700;
+}
+
