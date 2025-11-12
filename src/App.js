@@ -12,6 +12,7 @@ import ScrollToTop from './components/ScrollToTop';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import PlayersList from './pages/PlayersList';
+import Data from './pages/Data';
 import DescriptiveAnalysis from './pages/DescriptiveAnalysis';
 import InferentialStatistics from './pages/InferentialStatistics';
 import CorrelationAnalysis from './pages/CorrelationAnalysis';
@@ -43,6 +44,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <PlayersList />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/data"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Data />
                   </Layout>
                 </ProtectedRoute>
               }

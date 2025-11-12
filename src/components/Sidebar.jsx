@@ -63,6 +63,17 @@ const Sidebar = ({ isOpen, onClose }) => {
           </NavLink>
 
           <NavLink
+            to="/data"
+            className={({ isActive }) =>
+              `sidebar-nav-item ${isActive ? 'active' : ''}`
+            }
+            onClick={handleNavClick}
+          >
+            <span className="nav-icon">📋</span>
+            <span className="nav-text">Data</span>
+          </NavLink>
+
+          <NavLink
             to="/analysis"
             className={({ isActive }) =>
               `sidebar-nav-item ${isActive ? 'active' : ''}`
