@@ -5,6 +5,7 @@
 
 import { createContext, useContext, useState, useEffect } from 'react';
 import { gameDataAPI } from '../services/api';
+import config from '../config';
 
 const GameDataContext = createContext(null);
 
@@ -14,20 +15,30 @@ export const GameDataProvider = ({ children }) => {
   const [error, setError] = useState('');
 
   const fetchData = async () => {
+    // Only fetch if user is authenticated
+    const token = localStorage.getItem(config.auth.tokenStorageKey);
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
       const gameData = await gameDataAPI.getAll();
       setData(gameData);
     } catch (err) {
-      setError('Failed to load game data');
-      console.error('Game data fetch error:', err);
+      // Don't set error if it's a 401 (user not authenticated)
+      if (err.response?.status !== 401) {
+        setError('Failed to load game data');
+        console.error('Game data fetch error:', err);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch data once on mount
+  // Fetch data once on mount, but only if authenticated
   useEffect(() => {
     fetchData();
   }, []);

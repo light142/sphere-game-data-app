@@ -37,7 +37,11 @@ apiClient.interceptors.response.use(
       // Unauthorized - clear auth and redirect to login
       localStorage.removeItem(config.auth.tokenStorageKey);
       localStorage.removeItem(config.auth.userStorageKey);
-      window.location.href = '/login';
+      
+      // Only redirect if not already on login page to prevent redirect loops
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
