@@ -15,8 +15,6 @@ import PlayersList from './pages/PlayersList';
 import Data from './pages/Data';
 import DescriptiveAnalysis from './pages/DescriptiveAnalysis';
 import InferentialStatistics from './pages/InferentialStatistics';
-import CorrelationAnalysis from './pages/CorrelationAnalysis';
-import RegressionAnalysis from './pages/RegressionAnalysis';
 import './App.css';
 
 function App() {
@@ -74,26 +72,6 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <InferentialStatistics />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/correlation"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <CorrelationAnalysis />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/regression"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <RegressionAnalysis />
                   </Layout>
                 </ProtectedRoute>
               }

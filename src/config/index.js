@@ -29,6 +29,16 @@ const config = {
     defaultPageSize: 50,
   },
 
+  // Data Source Configuration
+  dataSource: {
+    // Options: 'api', 'json', 'combined'
+    // 'api' - Use only API data
+    // 'json' - Use only game-data.json file
+    // 'combined' - Combine both API and JSON data
+    mode: 'combined', // Change to 'api' or 'combined' as needed
+    jsonFilePath: '/game-data.json', // Path to JSON file in public folder
+  },
+
   // UI Configuration - AIS Color Scheme (Red, White, Black, Gold)
   ui: {
     theme: {

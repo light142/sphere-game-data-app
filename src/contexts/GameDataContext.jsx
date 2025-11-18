@@ -4,7 +4,8 @@
  */
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { gameDataAPI } from '../services/api';
+import { loadGameData } from '../services/dataService';
+import config from '../config';
 import { useAuth } from './AuthContext';
 
 const GameDataContext = createContext(null);
@@ -16,8 +17,9 @@ export const GameDataProvider = ({ children }) => {
   const { isAuthenticated, loading: authLoading } = useAuth();
 
   const fetchData = useCallback(async () => {
-    // Only fetch if user is authenticated
-    if (!isAuthenticated) {
+    // For API mode, require authentication
+    // For JSON or combined mode, authentication is optional
+    if (config.dataSource.mode === 'api' && !isAuthenticated) {
       setLoading(false);
       setData([]);
       return;
@@ -26,11 +28,15 @@ export const GameDataProvider = ({ children }) => {
     try {
       setLoading(true);
       setError('');
-      const gameData = await gameDataAPI.getAll();
+      const gameData = await loadGameData(isAuthenticated);
       setData(gameData);
     } catch (err) {
-      // Don't set error if it's a 401 (user not authenticated)
-      if (err.response?.status !== 401) {
+      // Don't set error if it's a 401 (user not authenticated) and we're in API mode
+      if (config.dataSource.mode === 'api' && err.response?.status === 401) {
+        // Authentication required for API mode
+        setError('');
+        setData([]);
+      } else {
         setError('Failed to load game data');
         console.error('Game data fetch error:', err);
       }
@@ -41,8 +47,11 @@ export const GameDataProvider = ({ children }) => {
 
   // Fetch data when authentication state changes
   useEffect(() => {
-    // Wait for auth to finish loading before fetching
-    if (!authLoading) {
+    // For JSON mode, fetch immediately (no auth needed)
+    // For API mode, wait for auth to finish loading
+    if (config.dataSource.mode === 'json') {
+      fetchData();
+    } else if (!authLoading) {
       fetchData();
     }
   }, [isAuthenticated, authLoading, fetchData]);

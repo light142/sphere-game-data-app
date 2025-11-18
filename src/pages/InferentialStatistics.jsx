@@ -1,6 +1,6 @@
 /**
- * Inferential Statistics Page
- * Statistical tests: t-Test, ANOVA, Chi-Square
+ * Statistical Analysis Page
+ * Paired t-Test: AR vs 2D performance difference
  */
 
 import { useMemo } from 'react';
@@ -17,14 +17,14 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  Cell,
+  ReferenceLine,
 } from 'recharts';
 import '../styles/InferentialStatistics.css';
 
 const InferentialStatistics = () => {
   const { data, loading, error } = useGameData();
 
-  // Process data for statistical tests
+  // Process data for paired t-test
   const processedData = useMemo(() => {
     if (!data || data.length === 0) return null;
 
@@ -66,14 +66,8 @@ const InferentialStatistics = () => {
       }
     });
 
-    // Data for tests
-    const responseTimesAR = [];
-    const responseTimes2D = [];
-    const responseTimesByLevel = {}; // { level: [times] }
-    const gameOutcomesByMode = {
-      AR: { 'Game Over': 0, 'Level Complete': 0, 'Restarted': 0, 'Player Left': 0 },
-      '2D': { 'Game Over': 0, 'Level Complete': 0, 'Restarted': 0, 'Player Left': 0 },
-    };
+    // Track player performance by mode
+    const playerData = {}; // { playerId: { AR: { maxLevel, avgLevel, avgRT }, '2D': { maxLevel, avgLevel, avgRT } } }
 
     Object.values(gamesMap).forEach((gameEvents) => {
       const sortedEvents = [...gameEvents].sort(
@@ -81,24 +75,44 @@ const InferentialStatistics = () => {
       );
 
       const rawGameMode = sortedEvents.find((e) => e.game_mode)?.game_mode || null;
-      const gameModeCategory = mapGameModeToCategory(rawGameMode) || 'Unknown';
+      const gameModeCategory = mapGameModeToCategory(rawGameMode);
+      
+      if (gameModeCategory !== 'AR' && gameModeCategory !== '2D') return;
 
-      // Calculate response times per level
+      // Get players in this game
+      const gamePlayers = new Set();
+      sortedEvents.forEach((event) => {
+        if (event.player_id) {
+          gamePlayers.add(event.player_id);
+        }
+      });
+
+      // Get max level reached in this game
+      const gameLevels = sortedEvents
+        .map((e) => e.game_level)
+        .filter((l) => l !== null && l !== undefined && l > 0);
+      const maxLevel = gameLevels.length > 0 ? Math.max(...gameLevels) : 0;
+
+      // Calculate response times for this game
+      const responseTimes = [];
       const eventsByLevel = {};
       sortedEvents.forEach((event, index) => {
         const level = event.game_level !== null && event.game_level !== undefined ? event.game_level : 'unknown';
-        if (!eventsByLevel[level]) {
-          eventsByLevel[level] = [];
+        if (level !== 'unknown' && level > 0) {
+          if (!eventsByLevel[level]) {
+            eventsByLevel[level] = [];
+          }
+          eventsByLevel[level].push({ ...event, originalIndex: index });
         }
-        eventsByLevel[level].push({ ...event, originalIndex: index });
       });
 
+      const isAR = gameModeCategory === 'AR';
       Object.keys(eventsByLevel).forEach((level) => {
-        if (level === 'unknown' || Number(level) <= 0) return;
+        const levelNum = Number(level);
+        if (levelNum <= 0) return;
 
         const levelEvents = eventsByLevel[level];
-        const isAR = gameModeCategory === 'AR';
-        const currentLevel = Number(level);
+        const currentLevel = levelNum;
 
         // Find last Simon event
         let lastSimonEvent = null;
@@ -122,7 +136,6 @@ const InferentialStatistics = () => {
           const lastSimonIndex = lastSimonEvent.originalIndex;
           let endEvent = null;
 
-          // Find level_complete (level + 1) or game_over
           for (let i = lastSimonIndex + 1; i < sortedEvents.length; i++) {
             const event = sortedEvents[i];
             if (event.event_type === 'level_complete' && event.game_level === currentLevel + 1) {
@@ -146,126 +159,116 @@ const InferentialStatistics = () => {
             const endTime = new Date(endEvent.event_at);
             const duration = endTime - simonTime;
             if (duration > 0) {
-              const responseTime = duration / 1000; // Convert to seconds
-              
-              // Group by mode
-              if (gameModeCategory === 'AR') {
-                responseTimesAR.push(responseTime);
-              } else if (gameModeCategory === '2D') {
-                responseTimes2D.push(responseTime);
-              }
-
-              // Group by level
-              if (!responseTimesByLevel[currentLevel]) {
-                responseTimesByLevel[currentLevel] = [];
-              }
-              responseTimesByLevel[currentLevel].push(responseTime);
+              responseTimes.push(duration / 1000);
             }
           }
         }
       });
 
-      // Track game outcomes by mode
-      if (gameModeCategory === 'AR' || gameModeCategory === '2D') {
-        const hasGameOver = sortedEvents.some((e) => e.event_type === 'game_over');
-        const hasRestart = sortedEvents.some((e) => e.event_type === 'restart_game');
-        const hasQuit = sortedEvents.some((e) => e.event_type === 'quit_application');
-        const hasBackToMenu = sortedEvents.some((e) => e.event_type === 'back_to_menu');
-        const hasLevelComplete = sortedEvents.some((e) => e.event_type === 'level_complete');
+      const avgRT = responseTimes.length > 0 
+        ? responseTimes.reduce((sum, rt) => sum + rt, 0) / responseTimes.length 
+        : 0;
 
-        if (hasGameOver) {
-          gameOutcomesByMode[gameModeCategory]['Game Over']++;
-        } else if (hasRestart) {
-          gameOutcomesByMode[gameModeCategory]['Restarted']++;
-        } else if (hasQuit || hasBackToMenu) {
-          gameOutcomesByMode[gameModeCategory]['Player Left']++;
-        } else if (hasLevelComplete) {
-          gameOutcomesByMode[gameModeCategory]['Level Complete']++;
+      // Update player data
+      gamePlayers.forEach((playerId) => {
+        if (!playerData[playerId]) {
+          playerData[playerId] = { AR: { maxLevels: [], avgLevels: [], avgRTs: [] }, '2D': { maxLevels: [], avgLevels: [], avgRTs: [] } };
+        }
+        
+        if (maxLevel > 0) {
+          playerData[playerId][gameModeCategory].maxLevels.push(maxLevel);
+          playerData[playerId][gameModeCategory].avgLevels.push(maxLevel);
+        }
+        if (avgRT > 0) {
+          playerData[playerId][gameModeCategory].avgRTs.push(avgRT);
+        }
+      });
+    });
+
+    // Calculate paired data (players who played both modes)
+    const pairedData = [];
+    
+    Object.keys(playerData).forEach((playerId) => {
+      const player = playerData[playerId];
+      const hasAR = player.AR.maxLevels.length > 0 || player.AR.avgRTs.length > 0;
+      const has2D = player['2D'].maxLevels.length > 0 || player['2D'].avgRTs.length > 0;
+
+      if (hasAR && has2D) {
+        // Calculate averages for this player
+        const arMaxLevel = player.AR.maxLevels.length > 0 
+          ? Math.max(...player.AR.maxLevels) 
+          : 0;
+        const twoDMaxLevel = player['2D'].maxLevels.length > 0 
+          ? Math.max(...player['2D'].maxLevels) 
+          : 0;
+
+        const arAvgLevel = player.AR.avgLevels.length > 0
+          ? player.AR.avgLevels.reduce((sum, l) => sum + l, 0) / player.AR.avgLevels.length
+          : 0;
+        const twoDAvgLevel = player['2D'].avgLevels.length > 0
+          ? player['2D'].avgLevels.reduce((sum, l) => sum + l, 0) / player['2D'].avgLevels.length
+          : 0;
+
+        const arAvgRT = player.AR.avgRTs.length > 0
+          ? player.AR.avgRTs.reduce((sum, rt) => sum + rt, 0) / player.AR.avgRTs.length
+          : 0;
+        const twoDAvgRT = player['2D'].avgRTs.length > 0
+          ? player['2D'].avgRTs.reduce((sum, rt) => sum + rt, 0) / player['2D'].avgRTs.length
+          : 0;
+
+        if (arMaxLevel > 0 && twoDMaxLevel > 0) {
+          pairedData.push({
+            playerId,
+            arMaxLevel,
+            twoDMaxLevel,
+            arAvgLevel,
+            twoDAvgLevel,
+            arAvgRT: arAvgRT > 0 ? arAvgRT : null,
+            twoDAvgRT: twoDAvgRT > 0 ? twoDAvgRT : null,
+          });
         }
       }
     });
 
-    return {
-      responseTimesAR,
-      responseTimes2D,
-      responseTimesByLevel,
-      gameOutcomesByMode,
-    };
+    return { pairedData };
   }, [data]);
 
-  // Statistical test functions
+  // Statistical functions
   const calculateMean = (values) => {
     if (!values || values.length === 0) return 0;
-    const validValues = values.filter(v => !isNaN(v) && isFinite(v));
+    const validValues = values.filter(v => v !== null && !isNaN(v) && isFinite(v));
     if (validValues.length === 0) return 0;
     return validValues.reduce((acc, val) => acc + val, 0) / validValues.length;
   };
 
-  const calculateVariance = (values) => {
+  const calculateStdDev = (values) => {
     if (!values || values.length === 0) return 0;
-    const validValues = values.filter(v => !isNaN(v) && isFinite(v));
+    const validValues = values.filter(v => v !== null && !isNaN(v) && isFinite(v));
     if (validValues.length === 0) return 0;
     const mean = calculateMean(validValues);
     const squaredDiffs = validValues.map((val) => Math.pow(val - mean, 2));
-    return calculateMean(squaredDiffs);
+    const variance = calculateMean(squaredDiffs);
+    return Math.sqrt(variance);
   };
 
-  const calculateStdDev = (values) => {
-    return Math.sqrt(calculateVariance(values));
+  const calculateMedian = (values) => {
+    if (!values || values.length === 0) return 0;
+    const validValues = values.filter(v => v !== null && !isNaN(v) && isFinite(v));
+    if (validValues.length === 0) return 0;
+    const sorted = [...validValues].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
   };
 
-  // Independent Samples t-Test
-  const performTTest = (group1, group2) => {
-    if (group1.length < 2 || group2.length < 2) {
-      return { error: 'Insufficient data for t-test (need at least 2 samples per group)' };
-    }
-
-    const mean1 = calculateMean(group1);
-    const mean2 = calculateMean(group2);
-    const var1 = calculateVariance(group1);
-    const var2 = calculateVariance(group2);
-    const n1 = group1.length;
-    const n2 = group2.length;
-
-    // Pooled standard error
-    const pooledStdErr = Math.sqrt((var1 / n1) + (var2 / n2));
-    
-    if (pooledStdErr === 0) {
-      return { error: 'Cannot calculate t-test: pooled standard error is zero' };
-    }
-
-    // t-statistic
-    const t = (mean1 - mean2) / pooledStdErr;
-
-    // Degrees of freedom (Welch's approximation)
-    const df = Math.pow((var1 / n1) + (var2 / n2), 2) / 
-      (Math.pow(var1 / n1, 2) / (n1 - 1) + Math.pow(var2 / n2, 2) / (n2 - 1));
-
-    // Approximate p-value using t-distribution (simplified)
-    // For large samples, t follows approximately normal distribution
-    const absT = Math.abs(t);
-    // Simplified p-value calculation (two-tailed)
-    let pValue;
-    if (df > 30) {
-      // Normal approximation
-      pValue = 2 * (1 - normalCDF(absT));
-    } else {
-      // Use t-distribution approximation
-      pValue = 2 * (1 - tCDF(absT, df));
-    }
-
-    return {
-      tStatistic: t,
-      degreesOfFreedom: df,
-      pValue: pValue,
-      mean1: mean1,
-      mean2: mean2,
-      stdDev1: calculateStdDev(group1),
-      stdDev2: calculateStdDev(group2),
-      n1: n1,
-      n2: n2,
-      significant: pValue < 0.05,
-    };
+  const calculatePercentile = (values, percentile) => {
+    if (!values || values.length === 0) return 0;
+    const validValues = values.filter(v => v !== null && !isNaN(v) && isFinite(v));
+    if (validValues.length === 0) return 0;
+    const sorted = [...validValues].sort((a, b) => a - b);
+    const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+    return sorted[Math.max(0, index)];
   };
 
   // Normal CDF approximation
@@ -299,272 +302,187 @@ const InferentialStatistics = () => {
     return normalCDF(x);
   };
 
-  // ANOVA (Analysis of Variance)
-  const performANOVA = (groups) => {
-    const groupKeys = Object.keys(groups).filter(key => {
-      const values = groups[key];
-      return values && values.length >= 2;
-    });
+  // Paired t-Test
+  const performPairedTTest = (pairs, arKey, twoDKey) => {
+    const differences = pairs
+      .filter(p => p[arKey] !== null && p[twoDKey] !== null)
+      .map(p => p[arKey] - p[twoDKey]);
 
-    if (groupKeys.length < 2) {
-      return { error: 'ANOVA requires at least 2 groups with at least 2 samples each' };
+    if (differences.length < 2) {
+      return { error: 'Insufficient data for paired t-test (need at least 2 pairs)' };
     }
 
-    const allValues = [];
-    const groupMeans = {};
-    const groupSizes = {};
-    let totalSum = 0;
-    let totalCount = 0;
+    const meanDiff = calculateMean(differences);
+    const stdDevDiff = calculateStdDev(differences);
+    const n = differences.length;
 
-    groupKeys.forEach((key) => {
-      const values = groups[key].filter(v => !isNaN(v) && isFinite(v));
-      if (values.length === 0) return;
-      
-      groupMeans[key] = calculateMean(values);
-      groupSizes[key] = values.length;
-      allValues.push(...values);
-      totalSum += values.reduce((acc, val) => acc + val, 0);
-      totalCount += values.length;
-    });
-
-    if (totalCount === 0) {
-      return { error: 'No valid data for ANOVA' };
+    if (stdDevDiff === 0) {
+      return { error: 'Cannot calculate t-test: standard deviation of differences is zero' };
     }
 
-    const grandMean = totalSum / totalCount;
+    // Standard error of the mean difference
+    const stdErr = stdDevDiff / Math.sqrt(n);
 
-    // Sum of Squares Between (SSB)
-    let ssb = 0;
-    groupKeys.forEach((key) => {
-      const n = groupSizes[key];
-      const mean = groupMeans[key];
-      ssb += n * Math.pow(mean - grandMean, 2);
-    });
-
-    // Sum of Squares Within (SSW)
-    let ssw = 0;
-    groupKeys.forEach((key) => {
-      const values = groups[key].filter(v => !isNaN(v) && isFinite(v));
-      const mean = groupMeans[key];
-      values.forEach((val) => {
-        ssw += Math.pow(val - mean, 2);
-      });
-    });
+    // t-statistic
+    const t = meanDiff / stdErr;
 
     // Degrees of freedom
-    const dfBetween = groupKeys.length - 1;
-    const dfWithin = totalCount - groupKeys.length;
+    const df = n - 1;
 
-    if (dfWithin <= 0) {
-      return { error: 'Insufficient degrees of freedom for ANOVA' };
-    }
-
-    // Mean Squares
-    const msBetween = ssb / dfBetween;
-    const msWithin = ssw / dfWithin;
-
-    // F-statistic
-    const fStatistic = msWithin === 0 ? 0 : msBetween / msWithin;
-
-    // Approximate p-value (simplified)
-    const pValue = 1 - fCDF(fStatistic, dfBetween, dfWithin);
+    // Two-tailed p-value
+    const absT = Math.abs(t);
+    const pValue = 2 * (1 - tCDF(absT, df));
 
     return {
-      fStatistic: fStatistic,
-      pValue: pValue,
-      dfBetween: dfBetween,
-      dfWithin: dfWithin,
-      ssb: ssb,
-      ssw: ssw,
-      msBetween: msBetween,
-      msWithin: msWithin,
-      groupMeans: groupMeans,
-      groupSizes: groupSizes,
-      grandMean: grandMean,
-      significant: pValue < 0.05,
-    };
-  };
-
-  // F-distribution CDF approximation
-  const fCDF = (f, df1, df2) => {
-    if (f <= 0) return 0;
-    // Simplified approximation
-    const x = df2 / (df2 + df1 * f);
-    return incompleteBeta(x, df2 / 2, df1 / 2);
-  };
-
-  // Incomplete Beta function approximation
-  const incompleteBeta = (x, a, b) => {
-    // Simplified approximation
-    if (x === 0) return 0;
-    if (x === 1) return 1;
-    // Use normal approximation for simplicity
-    return normalCDF(Math.sqrt(x));
-  };
-
-  // Chi-Square Test
-  const performChiSquare = (observed) => {
-    const categories = Object.keys(observed);
-    if (categories.length < 2) {
-      return { error: 'Chi-square test requires at least 2 categories' };
-    }
-
-    const groups = Object.keys(observed[categories[0]]);
-    if (groups.length < 2) {
-      return { error: 'Chi-square test requires at least 2 groups' };
-    }
-
-    // Calculate totals
-    const rowTotals = {};
-    const colTotals = {};
-    let grandTotal = 0;
-
-    categories.forEach((cat) => {
-      rowTotals[cat] = 0;
-      groups.forEach((group) => {
-        const value = observed[cat][group] || 0;
-        rowTotals[cat] += value;
-        colTotals[group] = (colTotals[group] || 0) + value;
-        grandTotal += value;
-      });
-    });
-
-    if (grandTotal === 0) {
-      return { error: 'No data for chi-square test' };
-    }
-
-    // Calculate expected frequencies and chi-square statistic
-    let chiSquare = 0;
-    const expected = {};
-    const residuals = {};
-
-    categories.forEach((cat) => {
-      expected[cat] = {};
-      residuals[cat] = {};
-      groups.forEach((group) => {
-        const observedValue = observed[cat][group] || 0;
-        const expectedValue = (rowTotals[cat] * colTotals[group]) / grandTotal;
-        expected[cat][group] = expectedValue;
-        
-        if (expectedValue > 0) {
-          const residual = observedValue - expectedValue;
-          residuals[cat][group] = residual;
-          chiSquare += Math.pow(residual, 2) / expectedValue;
-        }
-      });
-    });
-
-    // Degrees of freedom
-    const df = (categories.length - 1) * (groups.length - 1);
-
-    // Approximate p-value using chi-square distribution
-    const pValue = 1 - chiSquareCDF(chiSquare, df);
-
-    return {
-      chiSquare: chiSquare,
+      tStatistic: t,
       degreesOfFreedom: df,
       pValue: pValue,
-      expected: expected,
-      observed: observed,
-      residuals: residuals,
+      meanDifference: meanDiff,
+      stdDevDifference: stdDevDiff,
+      stdErr: stdErr,
+      n: n,
       significant: pValue < 0.05,
+      arMean: calculateMean(pairs.map(p => p[arKey]).filter(v => v !== null)),
+      twoDMean: calculateMean(pairs.map(p => p[twoDKey]).filter(v => v !== null)),
     };
   };
 
-  // Chi-square CDF approximation
-  const chiSquareCDF = (x, df) => {
-    if (x <= 0) return 0;
-    // Simplified approximation using normal distribution
-    const z = Math.sqrt(2 * x) - Math.sqrt(2 * df - 1);
-    return normalCDF(z);
-  };
+  // Calculate paired differences (delta) statistics
+  const deltaStatistics = useMemo(() => {
+    if (!processedData || !processedData.pairedData || processedData.pairedData.length === 0) return null;
 
-  // Percentile calculation
-  const percentile = (values, p) => {
-    if (!values || values.length === 0) return 0;
-    const sorted = [...values].filter(v => !isNaN(v) && isFinite(v)).sort((a, b) => a - b);
-    if (sorted.length === 0) return 0;
-    const index = Math.floor(sorted.length * p);
-    return sorted[Math.min(index, sorted.length - 1)];
-  };
+    // Calculate differences for each metric
+    const maxLevelDeltas = processedData.pairedData
+      .map(p => p.arMaxLevel - p.twoDMaxLevel);
+    
+    const avgLevelDeltas = processedData.pairedData
+      .map(p => p.arAvgLevel - p.twoDAvgLevel);
+    
+    const avgRTDeltas = processedData.pairedData
+      .filter(p => p.arAvgRT !== null && p.twoDAvgRT !== null)
+      .map(p => p.arAvgRT - p.twoDAvgRT);
+
+    // Helper function to calculate delta stats
+    // higherIsBetter: true for metrics where higher values are better (e.g., Max Level, Avg Level)
+    // higherIsBetter: false for metrics where lower values are better (e.g., Response Time)
+    const calculateDeltaStats = (deltas, metricName, higherIsBetter = true) => {
+      if (deltas.length === 0) return null;
+      
+      const validDeltas = deltas.filter(d => !isNaN(d) && isFinite(d));
+      if (validDeltas.length === 0) return null;
+
+      const meanDelta = calculateMean(validDeltas);
+      const medianDelta = calculateMedian(validDeltas);
+      const sdDelta = calculateStdDev(validDeltas);
+      
+      // For higher-is-better metrics: positive delta = improved
+      // For lower-is-better metrics: negative delta = improved
+      const improvedCount = higherIsBetter
+        ? validDeltas.filter(d => d > 0).length
+        : validDeltas.filter(d => d < 0).length;
+      const percentImproved = (improvedCount / validDeltas.length) * 100;
+
+      return {
+        metric: metricName,
+        n: validDeltas.length,
+        meanDelta,
+        medianDelta,
+        sdDelta,
+        percentImproved,
+        deltas: validDeltas,
+      };
+    };
+
+    return {
+      maxLevel: calculateDeltaStats(maxLevelDeltas, 'Max Level', true), // Higher is better
+      avgLevel: calculateDeltaStats(avgLevelDeltas, 'Avg Level', true), // Higher is better
+      avgRT: calculateDeltaStats(avgRTDeltas, 'Avg RT (s)', false), // Lower is better
+    };
+  }, [processedData]);
 
   // Calculate test results
   const testResults = useMemo(() => {
-    if (!processedData) return null;
+    if (!processedData || !processedData.pairedData || processedData.pairedData.length === 0) return null;
 
-    // t-Test: AR vs 2D response times
-    const tTestResult = performTTest(processedData.responseTimesAR, processedData.responseTimes2D);
-
-    // ANOVA: Response times by level
-    const anovaResult = performANOVA(processedData.responseTimesByLevel);
-
-    // Chi-Square: Game outcomes by mode
-    const chiSquareResult = performChiSquare(processedData.gameOutcomesByMode);
+    const pairedTTestMaxLevel = performPairedTTest(processedData.pairedData, 'arMaxLevel', 'twoDMaxLevel');
+    const pairedTTestAvgLevel = performPairedTTest(processedData.pairedData, 'arAvgLevel', 'twoDAvgLevel');
+    
+    // Filter out null values for RT
+    // Note: RT requires valid Simon select → level_complete/game_over event pairs
+    // Some players may have level data but missing RT data if events don't match up properly
+    const validRTData = processedData.pairedData.filter(p => p.arAvgRT !== null && p.twoDAvgRT !== null);
+    const pairedTTestAvgRT = validRTData.length >= 2 
+      ? performPairedTTest(validRTData, 'arAvgRT', 'twoDAvgRT')
+      : { error: 'Insufficient response time data for paired t-test' };
 
     return {
-      tTest: tTestResult,
-      anova: anovaResult,
-      chiSquare: chiSquareResult,
+      maxLevel: pairedTTestMaxLevel,
+      avgLevel: pairedTTestAvgLevel,
+      avgRT: pairedTTestAvgRT,
     };
   }, [processedData]);
 
   // Prepare chart data
   const chartData = useMemo(() => {
-    if (!processedData || !testResults) return null;
+    if (!testResults) return null;
 
-    // Box plot data for t-Test
-    const boxPlotData = [
-      {
-        name: 'AR',
-        min: Math.min(...processedData.responseTimesAR),
-        q1: percentile(processedData.responseTimesAR, 0.25),
-        median: percentile(processedData.responseTimesAR, 0.5),
-        q3: percentile(processedData.responseTimesAR, 0.75),
-        max: Math.max(...processedData.responseTimesAR),
-        mean: calculateMean(processedData.responseTimesAR),
-      },
-      {
-        name: '2D',
-        min: Math.min(...processedData.responseTimes2D),
-        q1: percentile(processedData.responseTimes2D, 0.25),
-        median: percentile(processedData.responseTimes2D, 0.5),
-        q3: percentile(processedData.responseTimes2D, 0.75),
-        max: Math.max(...processedData.responseTimes2D),
-        mean: calculateMean(processedData.responseTimes2D),
-      },
-    ];
+    const barChartData = [];
 
-    // ANOVA data by level
-    const anovaChartData = Object.keys(processedData.responseTimesByLevel)
-      .sort((a, b) => Number(a) - Number(b))
-      .map((level) => {
-        const values = processedData.responseTimesByLevel[level];
-        return {
-          level: `Level ${level}`,
-          mean: calculateMean(values),
-          stdDev: calculateStdDev(values),
-          count: values.length,
-        };
+    if (!testResults.maxLevel.error) {
+      barChartData.push({
+        metric: 'Max Level',
+        AR: testResults.maxLevel.arMean,
+        '2D': testResults.maxLevel.twoDMean,
       });
+    }
 
-    // Chi-Square data
-    const chiSquareChartData = [];
-    Object.keys(processedData.gameOutcomesByMode).forEach((mode) => {
-      Object.keys(processedData.gameOutcomesByMode[mode]).forEach((outcome) => {
-        chiSquareChartData.push({
-          mode: mode,
-          outcome: outcome,
-          count: processedData.gameOutcomesByMode[mode][outcome],
+    if (!testResults.avgLevel.error) {
+      barChartData.push({
+        metric: 'Avg Level',
+        AR: testResults.avgLevel.arMean,
+        '2D': testResults.avgLevel.twoDMean,
+      });
+    }
+
+    if (!testResults.avgRT.error) {
+      barChartData.push({
+        metric: 'Avg RT (s)',
+        AR: testResults.avgRT.arMean,
+        '2D': testResults.avgRT.twoDMean,
+      });
+    }
+
+    // Prepare data for horizontal stacked bar chart showing % players better in AR vs 2D
+    const playerComparisonData = [];
+    if (deltaStatistics) {
+      if (deltaStatistics.maxLevel) {
+        playerComparisonData.push({
+          metric: 'Max Level',
+          betterInAR: deltaStatistics.maxLevel.percentImproved,
+          betterIn2D: 100 - deltaStatistics.maxLevel.percentImproved,
+          meanDelta: deltaStatistics.maxLevel.meanDelta,
         });
-      });
-    });
+      }
+      if (deltaStatistics.avgLevel) {
+        playerComparisonData.push({
+          metric: 'Avg Level',
+          betterInAR: deltaStatistics.avgLevel.percentImproved,
+          betterIn2D: 100 - deltaStatistics.avgLevel.percentImproved,
+          meanDelta: deltaStatistics.avgLevel.meanDelta,
+        });
+      }
+      if (deltaStatistics.avgRT) {
+        playerComparisonData.push({
+          metric: 'Avg RT (s)',
+          betterInAR: deltaStatistics.avgRT.percentImproved,
+          betterIn2D: 100 - deltaStatistics.avgRT.percentImproved,
+          meanDelta: deltaStatistics.avgRT.meanDelta,
+        });
+      }
+    }
 
-    return {
-      boxPlotData,
-      anovaChartData,
-      chiSquareChartData,
-    };
-  }, [processedData, testResults]);
+    return { barChartData, playerComparisonData };
+  }, [testResults, deltaStatistics]);
 
   if (loading) {
     return (
@@ -577,16 +495,16 @@ const InferentialStatistics = () => {
   if (error) {
     return (
       <div className="inferential-statistics-container">
-        <PageHeader title="Inferential Statistics" />
+        <PageHeader title="Statistical Analysis" />
         <div className="error">{error}</div>
       </div>
     );
   }
 
-  if (!testResults || !chartData) {
+  if (!testResults || !chartData || !deltaStatistics) {
     return (
       <div className="inferential-statistics-container">
-        <PageHeader title="Inferential Statistics" />
+        <PageHeader title="Statistical Analysis" />
         <div className="error">No data available for statistical analysis</div>
       </div>
     );
@@ -594,212 +512,223 @@ const InferentialStatistics = () => {
 
   return (
     <div className="inferential-statistics-container">
-      <PageHeader title="Inferential Statistics" />
+      <PageHeader title="Statistical Analysis" />
 
-      {/* Independent Samples t-Test */}
+      {/* Paired t-Test */}
       <section className="analysis-section">
-        <h2>Independent Samples t-Test</h2>
-        <p className="test-description">
-          <strong>Research Question:</strong> Is there a significant difference in response times between AR and 2D game modes?
-        </p>
-        
-        {testResults.tTest.error ? (
-          <div className="error-message">{testResults.tTest.error}</div>
-        ) : (
-          <>
-            <div className="test-results">
-              <div className="result-card">
-                <div className="result-label">t-Statistic</div>
-                <div className="result-value">{testResults.tTest.tStatistic.toFixed(4)}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">Degrees of Freedom</div>
-                <div className="result-value">{testResults.tTest.degreesOfFreedom.toFixed(2)}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">p-Value</div>
-                <div className={`result-value ${testResults.tTest.significant ? 'significant' : 'not-significant'}`}>
-                  {testResults.tTest.pValue.toFixed(4)}
-                </div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">AR Mean (s)</div>
-                <div className="result-value">{testResults.tTest.mean1.toFixed(2)}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">2D Mean (s)</div>
-                <div className="result-value">{testResults.tTest.mean2.toFixed(2)}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">AR Std Dev</div>
-                <div className="result-value">{testResults.tTest.stdDev1.toFixed(2)}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">2D Std Dev</div>
-                <div className="result-value">{testResults.tTest.stdDev2.toFixed(2)}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">AR Sample Size</div>
-                <div className="result-value">{testResults.tTest.n1}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">2D Sample Size</div>
-                <div className="result-value">{testResults.tTest.n2}</div>
-              </div>
-            </div>
+        <h2>Paired t-Test: AR vs 2D Performance Difference</h2>
 
-            <div className="interpretation">
-              <strong>Interpretation:</strong> {testResults.tTest.significant ? (
-                <span className="significant-text">
-                  There is a statistically significant difference in response times between AR and 2D modes (p &lt; 0.05).
-                </span>
-              ) : (
-                <span className="not-significant-text">
-                  There is no statistically significant difference in response times between AR and 2D modes (p ≥ 0.05).
-                </span>
+        {/* Results Table */}
+        <div className="chart-container">
+          <h3>Paired t-Test Results</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '2px solid #d1d5db' }}>
+                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #d1d5db' }}>Metric</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>AR Mean</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>2D Mean</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>Mean Difference</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>t-Statistic</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>df</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>p-Value</th>
+                <th style={{ padding: '12px', textAlign: 'center', border: '1px solid #d1d5db' }}>Significant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!testResults.maxLevel.error && (
+                <tr>
+                  <td style={{ padding: '10px', border: '1px solid #d1d5db', fontWeight: '500' }}>Max Level</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.maxLevel.arMean.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.maxLevel.twoDMean.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.maxLevel.meanDifference.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.maxLevel.tStatistic.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.maxLevel.degreesOfFreedom.toFixed(0)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.maxLevel.pValue.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #d1d5db', color: testResults.maxLevel.significant ? '#B91C1C' : '#6B7280', fontWeight: '500' }}>
+                    {testResults.maxLevel.significant ? 'Yes' : 'No'}
+                  </td>
+                </tr>
               )}
-            </div>
+              {!testResults.avgLevel.error && (
+                <tr style={{ backgroundColor: '#f9fafb' }}>
+                  <td style={{ padding: '10px', border: '1px solid #d1d5db', fontWeight: '500' }}>Avg Level</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgLevel.arMean.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgLevel.twoDMean.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgLevel.meanDifference.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgLevel.tStatistic.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgLevel.degreesOfFreedom.toFixed(0)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgLevel.pValue.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #d1d5db', color: testResults.avgLevel.significant ? '#B91C1C' : '#6B7280', fontWeight: '500' }}>
+                    {testResults.avgLevel.significant ? 'Yes' : 'No'}
+                  </td>
+                </tr>
+              )}
+              {!testResults.avgRT.error && (
+                <tr>
+                  <td style={{ padding: '10px', border: '1px solid #d1d5db', fontWeight: '500' }}>Avg RT (s)</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgRT.arMean.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgRT.twoDMean.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgRT.meanDifference.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgRT.tStatistic.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgRT.degreesOfFreedom.toFixed(0)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{testResults.avgRT.pValue.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'center', border: '1px solid #d1d5db', color: testResults.avgRT.significant ? '#B91C1C' : '#6B7280', fontWeight: '500' }}>
+                    {testResults.avgRT.significant ? 'Yes' : 'No'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-            <div className="chart-container">
-              <h3>Response Time Comparison: AR vs 2D</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData.boxPlotData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis label={{ value: 'Response Time (seconds)', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="mean" fill="#C41E3A" name="Mean" />
-                  <Bar dataKey="median" fill="#D4AF37" name="Median" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </>
+        {/* Bar Chart */}
+        {chartData.barChartData.length > 0 && (
+          <div className="chart-container">
+            <h3>Performance Comparison: AR vs 2D</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData.barChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="metric" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="AR" fill="#C41E3A" name="AR" />
+                <Bar dataKey="2D" fill="#D4AF37" name="2D" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </section>
 
-      {/* ANOVA */}
+      {/* Paired Differences (Delta) Table */}
       <section className="analysis-section">
-        <h2>ANOVA (Analysis of Variance)</h2>
-        <p className="test-description">
-          <strong>Research Question:</strong> Are there significant differences in response times across different game levels?
+        <h2>Paired Differences (Delta) Table</h2>
+        <p style={{ marginBottom: '20px', color: '#6B7280' }}>
+          Shows per-player difference between AR and 2D for key metrics. Positive Δ indicates AR better, negative Δ indicates 2D better.
         </p>
-        
-        {testResults.anova.error ? (
-          <div className="error-message">{testResults.anova.error}</div>
-        ) : (
-          <>
-            <div className="test-results">
-              <div className="result-card">
-                <div className="result-label">F-Statistic</div>
-                <div className="result-value">{testResults.anova.fStatistic.toFixed(4)}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">p-Value</div>
-                <div className={`result-value ${testResults.anova.significant ? 'significant' : 'not-significant'}`}>
-                  {testResults.anova.pValue.toFixed(4)}
-                </div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">df Between</div>
-                <div className="result-value">{testResults.anova.dfBetween}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">df Within</div>
-                <div className="result-value">{testResults.anova.dfWithin}</div>
-              </div>
-            </div>
 
-            <div className="interpretation">
-              <strong>Interpretation:</strong> {testResults.anova.significant ? (
-                <span className="significant-text">
-                  There are statistically significant differences in response times across different levels (p &lt; 0.05).
-                </span>
-              ) : (
-                <span className="not-significant-text">
-                  There are no statistically significant differences in response times across different levels (p ≥ 0.05).
-                </span>
+        {/* Delta Statistics Table */}
+        <div className="chart-container">
+          <h3>Delta Statistics (AR - 2D)</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f3f4f6', borderBottom: '2px solid #d1d5db' }}>
+                <th style={{ padding: '12px', textAlign: 'left', border: '1px solid #d1d5db' }}>Metric</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>Mean Δ (AR–2D)</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>Median Δ</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>SD Δ</th>
+                <th style={{ padding: '12px', textAlign: 'right', border: '1px solid #d1d5db' }}>% Players Better in AR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deltaStatistics.maxLevel && (
+                <tr>
+                  <td style={{ padding: '10px', border: '1px solid #d1d5db', fontWeight: '500' }}>Max Level</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.maxLevel.meanDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.maxLevel.medianDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.maxLevel.sdDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.maxLevel.percentImproved.toFixed(1)}%</td>
+                </tr>
               )}
-            </div>
-
-            <div className="chart-container">
-              <h3>Response Time by Level</h3>
-              {chartData.anovaChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={chartData.anovaChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="level" />
-                    <YAxis label={{ value: 'Mean Response Time (seconds)', angle: -90, position: 'insideLeft' }} />
-                    <Tooltip />
-                    <Bar dataKey="mean" fill="#C41E3A" name="Mean Response Time" />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="no-data">No data available</div>
+              {deltaStatistics.avgLevel && (
+                <tr style={{ backgroundColor: '#f9fafb' }}>
+                  <td style={{ padding: '10px', border: '1px solid #d1d5db', fontWeight: '500' }}>Avg Level</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.avgLevel.meanDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.avgLevel.medianDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.avgLevel.sdDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.avgLevel.percentImproved.toFixed(1)}%</td>
+                </tr>
               )}
-            </div>
-          </>
-        )}
-      </section>
-
-      {/* Chi-Square Test */}
-      <section className="analysis-section">
-        <h2>Chi-Square Test</h2>
-        <p className="test-description">
-          <strong>Research Question:</strong> Is there an association between game mode (AR vs 2D) and game outcomes?
-        </p>
-        
-        {testResults.chiSquare.error ? (
-          <div className="error-message">{testResults.chiSquare.error}</div>
-        ) : (
-          <>
-            <div className="test-results">
-              <div className="result-card">
-                <div className="result-label">Chi-Square Statistic</div>
-                <div className="result-value">{testResults.chiSquare.chiSquare.toFixed(4)}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">Degrees of Freedom</div>
-                <div className="result-value">{testResults.chiSquare.degreesOfFreedom}</div>
-              </div>
-              <div className="result-card">
-                <div className="result-label">p-Value</div>
-                <div className={`result-value ${testResults.chiSquare.significant ? 'significant' : 'not-significant'}`}>
-                  {testResults.chiSquare.pValue.toFixed(4)}
-                </div>
-              </div>
-            </div>
-
-            <div className="interpretation">
-              <strong>Interpretation:</strong> {testResults.chiSquare.significant ? (
-                <span className="significant-text">
-                  There is a statistically significant association between game mode and game outcomes (p &lt; 0.05).
-                </span>
-              ) : (
-                <span className="not-significant-text">
-                  There is no statistically significant association between game mode and game outcomes (p ≥ 0.05).
-                </span>
+              {deltaStatistics.avgRT && (
+                <tr>
+                  <td style={{ padding: '10px', border: '1px solid #d1d5db', fontWeight: '500' }}>Avg RT (s)</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.avgRT.meanDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.avgRT.medianDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.avgRT.sdDelta.toFixed(2)}</td>
+                  <td style={{ padding: '10px', textAlign: 'right', border: '1px solid #d1d5db' }}>{deltaStatistics.avgRT.percentImproved.toFixed(1)}%</td>
+                </tr>
               )}
-            </div>
+            </tbody>
+          </table>
+        </div>
 
-            <div className="chart-container">
-              <h3>Game Outcomes by Mode</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData.chiSquareChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="outcome" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="count" fill="#C41E3A" name="Count">
-                    {chartData.chiSquareChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.mode === 'AR' ? '#C41E3A' : '#D4AF37'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+        {/* Player Comparison Chart */}
+        {chartData.playerComparisonData && chartData.playerComparisonData.length > 0 && (
+          <div className="chart-container">
+            <h3>Player Performance Comparison: AR vs 2D</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart 
+                data={chartData.playerComparisonData} 
+                layout="vertical"
+                margin={{ top: 20, right: 30, left: 20, bottom: 40 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  type="number" 
+                  domain={[0, 100]}
+                  label={{ value: '% of Players', position: 'insideBottom', offset: -5 }}
+                />
+                <YAxis 
+                  type="category" 
+                  dataKey="metric" 
+                  width={100}
+                />
+                <Tooltip 
+                  formatter={(value, name) => {
+                    const labels = {
+                      'betterInAR': 'Better in AR',
+                      'betterIn2D': 'Better in 2D',
+                      'meanDelta': 'Mean Δ'
+                    };
+                    if (name === 'meanDelta') {
+                      return [`${value.toFixed(2)}`, labels[name] || name];
+                    }
+                    return [`${value.toFixed(1)}%`, labels[name] || name];
+                  }}
+                />
+                <Legend verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '20px' }} />
+                <Bar 
+                  dataKey="betterInAR" 
+                  stackId="a" 
+                  fill="#10B981" 
+                  name="Better in AR"
+                />
+                <Bar 
+                  dataKey="betterIn2D" 
+                  stackId="a" 
+                  fill="#EF4444" 
+                  name="Better in 2D"
+                />
+                {/* Mean Delta markers - show as reference lines with labels */}
+                {chartData.playerComparisonData.map((entry, index) => {
+                  // Position marker at the boundary between AR and 2D sections
+                  // Offset slightly to make it visible
+                  const markerPosition = entry.betterInAR;
+                  
+                  return (
+                    <ReferenceLine
+                      key={`marker-${index}`}
+                      x={markerPosition}
+                      stroke="#D4AF37"
+                      strokeWidth={2}
+                      strokeDasharray="3 3"
+                      label={{ 
+                        value: `Δ=${entry.meanDelta.toFixed(2)}`, 
+                        position: 'top',
+                        fill: '#D4AF37',
+                        fontSize: 11,
+                        fontWeight: 'bold'
+                      }}
+                    />
+                  );
+                })}
+              </BarChart>
+            </ResponsiveContainer>
+            <div style={{ marginTop: '10px', fontSize: '12px', color: '#6B7280' }}>
+              <p>Shows the percentage of players who performed better in each mode. Green indicates better in AR, red indicates better in 2D.</p>
+              <p style={{ marginTop: '5px' }}>The dashed gold line shows the Mean Δ (AR - 2D) value for reference.</p>
             </div>
-          </>
+          </div>
         )}
       </section>
     </div>
@@ -807,4 +736,3 @@ const InferentialStatistics = () => {
 };
 
 export default InferentialStatistics;
-

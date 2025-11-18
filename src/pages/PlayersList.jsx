@@ -69,21 +69,33 @@ const PlayersList = () => {
         }
 
         // Track sessions with start/end times
+        // Start time: first event in session (any event)
+        // End time: last game category event (events with game_reference)
         if (item.session_id) {
           if (!playersMap[playerId].sessions.has(item.session_id)) {
             playersMap[playerId].sessions.set(item.session_id, {
-              startTime: item.event_at,
-              endTime: item.event_at,
+              startTime: item.event_at, // First event (any event)
+              endTime: null, // Will be set by last game category event
+              games: new Set(), // Track games in this session
             });
           } else {
             const session = playersMap[playerId].sessions.get(item.session_id);
             const eventTime = new Date(item.event_at);
             const startTime = new Date(session.startTime);
-            const endTime = new Date(session.endTime);
+            // Update start time if this is an earlier event
             if (eventTime < startTime) {
               session.startTime = item.event_at;
             }
-            if (eventTime > endTime) {
+          }
+          
+          // Update end time only for game category events (those with game_reference)
+          if (item.game_reference && item.game_reference.trim() !== '') {
+            const session = playersMap[playerId].sessions.get(item.session_id);
+            const eventTime = new Date(item.event_at);
+            const endTime = session.endTime 
+              ? new Date(session.endTime)
+              : null;
+            if (!endTime || eventTime > endTime) {
               session.endTime = item.event_at;
             }
           }
@@ -92,6 +104,10 @@ const PlayersList = () => {
         // Only count as a game if it has a valid game_reference AND has at least one simon select event
         if (item.game_reference && item.game_reference.trim() !== '' && gamesWithSimonSelect.has(item.game_reference)) {
           playersMap[playerId].games.add(item.game_reference);
+          // Also track this game in the session
+          if (item.session_id && playersMap[playerId].sessions.has(item.session_id)) {
+            playersMap[playerId].sessions.get(item.session_id).games.add(item.game_reference);
+          }
         }
 
         // Track scores by game mode category (using game_level as score)
@@ -109,7 +125,10 @@ const PlayersList = () => {
 
       // Convert to array and calculate stats
       const playersArray = Object.values(playersMap).map((player) => {
-        const sessions = Array.from(player.sessions.values());
+        // Filter out sessions with no games
+        const sessions = Array.from(player.sessions.values()).filter((session) => {
+          return session.games && session.games.size > 0 && session.endTime !== null;
+        });
         const sessionDurations = sessions
           .map((session) => {
             const duration = new Date(session.endTime) - new Date(session.startTime);
@@ -117,32 +136,40 @@ const PlayersList = () => {
           })
           .filter((d) => d > 0);
 
-        // Calculate AR levels (exclude level 0 from lowest level calculation)
+        // Calculate AR levels (exclude level 0 from average calculation)
         const arScores = player.arScores.filter((s) => s !== null && s !== undefined);
         const arScoresExcludingZero = arScores.filter((s) => s > 0);
-        const highestLevelAR = arScores.length > 0 ? Math.max(...arScores) : null;
-        const lowestLevelAR = arScoresExcludingZero.length > 0 ? Math.min(...arScoresExcludingZero) : null;
+        const avgLevelAR = arScoresExcludingZero.length > 0 
+          ? arScoresExcludingZero.reduce((sum, score) => sum + score, 0) / arScoresExcludingZero.length 
+          : null;
+        const maxLevelAR = arScores.length > 0 ? Math.max(...arScores) : null;
 
-        // Calculate 2D levels (exclude level 0 from lowest level calculation)
+        // Calculate 2D levels (exclude level 0 from average calculation)
         const twoDScores = player.twoDScores.filter((s) => s !== null && s !== undefined);
         const twoDScoresExcludingZero = twoDScores.filter((s) => s > 0);
-        const highestLevel2D = twoDScores.length > 0 ? Math.max(...twoDScores) : null;
-        const lowestLevel2D = twoDScoresExcludingZero.length > 0 ? Math.min(...twoDScoresExcludingZero) : null;
+        const avgLevel2D = twoDScoresExcludingZero.length > 0 
+          ? twoDScoresExcludingZero.reduce((sum, score) => sum + score, 0) / twoDScoresExcludingZero.length 
+          : null;
+        const maxLevel2D = twoDScores.length > 0 ? Math.max(...twoDScores) : null;
 
-        // Calculate session durations
-        const longestSession = sessionDurations.length > 0 ? Math.max(...sessionDurations) : null;
-        const shortestSession = sessionDurations.length > 0 ? Math.min(...sessionDurations) : null;
+        // Calculate average and max session duration
+        const avgSessionTime = sessionDurations.length > 0 
+          ? sessionDurations.reduce((sum, duration) => sum + duration, 0) / sessionDurations.length 
+          : null;
+        const maxSessionTime = sessionDurations.length > 0 
+          ? Math.max(...sessionDurations) 
+          : null;
 
         return {
           ...player,
           sessionCount: player.sessions.size,
           gameCount: player.games.size,
-          highestLevelAR,
-          lowestLevelAR,
-          highestLevel2D,
-          lowestLevel2D,
-          longestSession, // in milliseconds
-          shortestSession, // in milliseconds
+          avgLevelAR,
+          maxLevelAR,
+          avgLevel2D,
+          maxLevel2D,
+          avgSessionTime, // in milliseconds
+          maxSessionTime, // in milliseconds
         };
       });
 
@@ -189,22 +216,14 @@ const PlayersList = () => {
       <div className="players-table-container">
         <div className="players-table">
           <div className="players-table-headers">
-            <div className="players-col-id">Player ID</div>
+            <div className="players-col-id">Player</div>
             <div className="players-col-sessions">Sessions</div>
             <div className="players-col-games">Games</div>
-            <div className="players-col-ar-group">AR</div>
-            <div className="players-col-2d-group">2D</div>
-            <div className="players-col-longest">Longest Session</div>
-            <div className="players-col-shortest">Shortest Session</div>
-            <div className="players-col-id-sub"></div>
-            <div className="players-col-sessions-sub"></div>
-            <div className="players-col-games-sub"></div>
-            <div className="players-col-highest-ar">Highest Level</div>
-            <div className="players-col-lowest-ar">Lowest Level</div>
-            <div className="players-col-highest-2d">Highest Level</div>
-            <div className="players-col-lowest-2d">Lowest Level</div>
-            <div className="players-col-longest-sub"></div>
-            <div className="players-col-shortest-sub"></div>
+            <div className="players-col-avg-ar">Avg Level (AR)</div>
+            <div className="players-col-avg-2d">Avg Level (2D)</div>
+            <div className="players-col-max-ar">Highest Level (AR)</div>
+            <div className="players-col-max-2d">Highest Level (2D)</div>
+            <div className="players-col-avg-session">Avg Session Time</div>
           </div>
           {players.map((player) => (
             <div
@@ -217,26 +236,21 @@ const PlayersList = () => {
               </div>
               <div className="players-col-sessions">{player.sessionCount}</div>
               <div className="players-col-games">{player.gameCount}</div>
-              <div className="players-col-highest-ar">
-                {player.highestLevelAR !== null ? player.highestLevelAR : 'N/A'}
+              <div className="players-col-avg-ar">
+                {player.avgLevelAR !== null ? player.avgLevelAR.toFixed(2) : 'N/A'}
               </div>
-              <div className="players-col-lowest-ar">
-                {player.lowestLevelAR !== null ? player.lowestLevelAR : 'N/A'}
+              <div className="players-col-avg-2d">
+                {player.avgLevel2D !== null ? player.avgLevel2D.toFixed(2) : 'N/A'}
               </div>
-              <div className="players-col-highest-2d">
-                {player.highestLevel2D !== null ? player.highestLevel2D : 'N/A'}
+              <div className="players-col-max-ar">
+                {player.maxLevelAR !== null ? player.maxLevelAR : 'N/A'}
               </div>
-              <div className="players-col-lowest-2d">
-                {player.lowestLevel2D !== null ? player.lowestLevel2D : 'N/A'}
+              <div className="players-col-max-2d">
+                {player.maxLevel2D !== null ? player.maxLevel2D : 'N/A'}
               </div>
-              <div className="players-col-longest">
-                {player.longestSession !== null
-                  ? `${Math.round(player.longestSession / 1000 / 60)} min`
-                  : 'N/A'}
-              </div>
-              <div className="players-col-shortest">
-                {player.shortestSession !== null
-                  ? `${Math.round(player.shortestSession / 1000 / 60)} min`
+              <div className="players-col-avg-session">
+                {player.avgSessionTime !== null
+                  ? `${Math.round(player.avgSessionTime / 1000 / 60)} min`
                   : 'N/A'}
               </div>
             </div>

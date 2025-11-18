@@ -49,32 +49,42 @@ const PlayerDetail = ({ player, onBack }) => {
           session_id: sessionId,
           events: [],
           games: new Set(),
-          startTime: event.event_at,
-          endTime: event.event_at,
+          startTime: event.event_at, // First event (any event)
+          endTime: null, // Will be set by last game category event
         };
       }
       sessionsMap[sessionId].events.push(event);
+      
+      // Update start time if this is an earlier event
+      const eventTime = new Date(event.event_at);
+      const startTime = new Date(sessionsMap[sessionId].startTime);
+      if (eventTime < startTime) {
+        sessionsMap[sessionId].startTime = event.event_at;
+      }
+      
       // Only count as a game if it has a valid game_reference AND has at least one simon select event
       if (event.game_reference && event.game_reference.trim() !== '' && gamesWithSimonSelect.has(event.game_reference)) {
         sessionsMap[sessionId].games.add(event.game_reference);
       }
-      // Update time range
-      const eventTime = new Date(event.event_at);
-      const startTime = new Date(sessionsMap[sessionId].startTime);
-      const endTime = new Date(sessionsMap[sessionId].endTime);
-      if (eventTime < startTime) {
-        sessionsMap[sessionId].startTime = event.event_at;
-      }
-      if (eventTime > endTime) {
-        sessionsMap[sessionId].endTime = event.event_at;
+      
+      // Update end time only for game category events (events with game_reference)
+      if (event.game_reference && event.game_reference.trim() !== '') {
+        const endTime = sessionsMap[sessionId].endTime 
+          ? new Date(sessionsMap[sessionId].endTime)
+          : null;
+        if (!endTime || eventTime > endTime) {
+          sessionsMap[sessionId].endTime = event.event_at;
+        }
       }
     });
 
-    return Object.values(sessionsMap).map((session) => ({
-      ...session,
-      gameCount: session.games.size,
-      games: Array.from(session.games),
-    }));
+    return Object.values(sessionsMap)
+      .filter((session) => session.games.size > 0) // Filter out sessions with no games
+      .map((session) => ({
+        ...session,
+        gameCount: session.games.size,
+        games: Array.from(session.games),
+      }));
   }, [player.events]);
 
   const toggleSession = (sessionId) => {
@@ -104,45 +114,45 @@ const PlayerDetail = ({ player, onBack }) => {
         <div className="summary-card">
           <h3>Player Summary</h3>
           <div className="summary-stats">
-            <div className="summary-item">
+            <div className="summary-item summary-item-row1">
               <span className="summary-label">Total Sessions:</span>
               <span className="summary-value">{player.sessionCount}</span>
             </div>
-            <div className="summary-item">
+            <div className="summary-item summary-item-row1">
               <span className="summary-label">Total Games:</span>
               <span className="summary-value">{player.gameCount}</span>
             </div>
-            <div className="summary-item">
+            <div className="summary-item summary-item-row1">
+              <span className="summary-label">AVG Session Duration:</span>
+              <span className="summary-value">
+                {player.avgSessionTime !== null
+                  ? `${Math.round(player.avgSessionTime / 1000 / 60)} min`
+                  : 'N/A'}
+              </span>
+            </div>
+            <div className="summary-item summary-item-row1">
+              <span className="summary-label">Highest Session Duration:</span>
+              <span className="summary-value">
+                {player.maxSessionTime !== null
+                  ? `${Math.round(player.maxSessionTime / 1000 / 60)} min`
+                  : 'N/A'}
+              </span>
+            </div>
+            <div className="summary-item summary-item-row2">
+              <span className="summary-label">AVG Level (AR):</span>
+              <span className="summary-value">{player.avgLevelAR !== null ? player.avgLevelAR.toFixed(2) : 'N/A'}</span>
+            </div>
+            <div className="summary-item summary-item-row2">
+              <span className="summary-label">AVG Level (2D):</span>
+              <span className="summary-value">{player.avgLevel2D !== null ? player.avgLevel2D.toFixed(2) : 'N/A'}</span>
+            </div>
+            <div className="summary-item summary-item-row2">
               <span className="summary-label">Highest Level (AR):</span>
-              <span className="summary-value">{player.highestLevelAR !== null ? player.highestLevelAR : 'N/A'}</span>
+              <span className="summary-value">{player.maxLevelAR !== null ? player.maxLevelAR : 'N/A'}</span>
             </div>
-            <div className="summary-item">
-              <span className="summary-label">Lowest Level (AR):</span>
-              <span className="summary-value">{player.lowestLevelAR !== null ? player.lowestLevelAR : 'N/A'}</span>
-            </div>
-            <div className="summary-item">
+            <div className="summary-item summary-item-row2">
               <span className="summary-label">Highest Level (2D):</span>
-              <span className="summary-value">{player.highestLevel2D !== null ? player.highestLevel2D : 'N/A'}</span>
-            </div>
-            <div className="summary-item">
-              <span className="summary-label">Lowest Level (2D):</span>
-              <span className="summary-value">{player.lowestLevel2D !== null ? player.lowestLevel2D : 'N/A'}</span>
-            </div>
-            <div className="summary-item">
-              <span className="summary-label">Longest Session:</span>
-              <span className="summary-value">
-                {player.longestSession !== null
-                  ? `${Math.round(player.longestSession / 1000 / 60)} min`
-                  : 'N/A'}
-              </span>
-            </div>
-            <div className="summary-item">
-              <span className="summary-label">Shortest Session:</span>
-              <span className="summary-value">
-                {player.shortestSession !== null
-                  ? `${Math.round(player.shortestSession / 1000 / 60)} min`
-                  : 'N/A'}
-              </span>
+              <span className="summary-value">{player.maxLevel2D !== null ? player.maxLevel2D : 'N/A'}</span>
             </div>
           </div>
         </div>

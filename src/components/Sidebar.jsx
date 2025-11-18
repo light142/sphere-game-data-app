@@ -92,30 +92,9 @@ const Sidebar = ({ isOpen, onClose }) => {
             onClick={handleNavClick}
           >
             <span className="nav-icon">🔬</span>
-            <span className="nav-text">Inferential Statistics</span>
+            <span className="nav-text">Statistical Analysis</span>
           </NavLink>
 
-          <NavLink
-            to="/correlation"
-            className={({ isActive }) =>
-              `sidebar-nav-item ${isActive ? 'active' : ''}`
-            }
-            onClick={handleNavClick}
-          >
-            <span className="nav-icon">🔗</span>
-            <span className="nav-text">Correlation Analysis</span>
-          </NavLink>
-
-          <NavLink
-            to="/regression"
-            className={({ isActive }) =>
-              `sidebar-nav-item ${isActive ? 'active' : ''}`
-            }
-            onClick={handleNavClick}
-          >
-            <span className="nav-icon">📉</span>
-            <span className="nav-text">Regression Analysis</span>
-          </NavLink>
         </div>
 
         <div className="sidebar-footer">
